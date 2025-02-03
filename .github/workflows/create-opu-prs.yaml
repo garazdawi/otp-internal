@@ -1,0 +1,45 @@
+name: Create OTP PRs
+
+on:
+  workflow_run:
+    workflows: [Build and check Erlang/OTP]
+    branches: ["*-opu"]
+    types:
+      - requested
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  pull-requests: write
+  contents: read
+  actions: write
+
+jobs:
+  create-pr:
+    name: Build Erlang/OTP (64-bit)
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'push'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # ratchet:actions/checkout@v4.2.2
+        with:
+            ref: ${{ github.event.workflow_run.head_sha }}
+            path: otp
+      - name: Update OPU PR
+        env:
+            GH_TOKEN: ${{ github.token }}
+        run: |
+          OTP_VERSION=$(cat otp/OTP_VERSION)
+          .github/scripts/update-prs.sh \
+            "${{ github.event.workflow_run.head_sha }}" \
+            "${{ github.event.workflow_run.head_branch }}" \
+            "${OTP_VERSION}"
+      - name: Cancel push run
+        run: |
+            ## We only run the PR github actions, not the push in order to
+            ## save on private cpu quota
+            gh api --method POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                /repos/${{github.repository}}/actions/runs/${{ github.event.workflow_run.id }}/cancel
